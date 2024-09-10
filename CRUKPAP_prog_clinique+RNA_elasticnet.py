@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jun 25 14:34:04 2024
+Created on Thu Jul 25 11:01:57 2024
 
 @author: moon
 """
@@ -44,7 +44,6 @@ for line in lines[1:]:
 
 # Créer le DataFrame avec les données
 df_genes_CRUKPAP = pd.DataFrame(data, columns=column_names)
-print(df_genes_CRUKPAP.shape)
 
 # Lire le fichier tsv CRUKPAP
 df_clinique_CRUKPAP = pd.read_csv(r'C:\Users\messa\Documents\Johanna_Lagoas_Stage\CRUKPAP\clinical_no_Inel.tsv', delimiter='\t')
@@ -192,13 +191,14 @@ for train_index, test_index in kf.split(X): ##kf.split(X_scaled) coupe X en 10 p
     y_test = pd.Series(y_test_list)
     
     # Définir la grille des hyperparamètres à tester
-    param_grid = {'C': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]}
+    param_grid = {'C': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    'l1_ratio': [0.5]}  # On fixe le ratio L1/L2 à 0.5
 
     ## Initialiser le modèle logistique 
-    logistique1 = LogisticRegression(penalty='l1', solver='liblinear', max_iter=1000)
+    logistique1 = LogisticRegression(penalty='elasticnet', solver='saga', max_iter=9000)
 
     # Initialiser la recherche par validation croisée
-    grid_search = GridSearchCV(estimator=logistique1, param_grid=param_grid, cv=5, scoring='accuracy')
+    grid_search = GridSearchCV(estimator=logistique1, param_grid=param_grid, cv=5, n_jobs = 10, scoring='accuracy')
 
     # Effectuer la recherche par validation croisée sur les données
     grid_search.fit(X_train, y_train)
@@ -207,7 +207,7 @@ for train_index, test_index in kf.split(X): ##kf.split(X_scaled) coupe X en 10 p
     best_C = grid_search.best_params_['C']
     
     # Initialiser un nouveau modèle logistique avec le meilleur paramètre C
-    logistique2 = LogisticRegression(penalty='l1', solver='liblinear', C=best_C, max_iter=1000)
+    logistique2 = LogisticRegression(penalty='elasticnet', solver='saga', C=best_C, l1_ratio = 0.5, max_iter=3000)
 
     logistique2.fit(X_train, y_train)
     y_pred = logistique2.predict(X_test)
@@ -274,7 +274,7 @@ plt.ylabel('Frequency')
 plt.title('Bootstrap AUC Distribution')
 plt.grid(True)
 plt.show()
-'''
+
 
 # Identifier les colonnes sélectionnées exactement 10 fois
 selected_10_times = np.where(coeff_selection_count == 10)[0]
@@ -285,7 +285,7 @@ selected_9_columns = X.columns[selected_9_times]
 
 print("Colonnes sélectionnées exactement 10 fois:", selected_10_columns)
 print("Colonnes sélectionnées exactement 9 fois:", selected_9_columns)
-
+'''
 
 # Créer un histogramme de la sélection des coefficients
 counts = Counter(coeff_selection_count)

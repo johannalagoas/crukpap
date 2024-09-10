@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jun 25 14:34:04 2024
+Created on Thu Jul 25 15:07:46 2024
 
 @author: moon
 """
@@ -44,7 +44,6 @@ for line in lines[1:]:
 
 # Créer le DataFrame avec les données
 df_genes_CRUKPAP = pd.DataFrame(data, columns=column_names)
-print(df_genes_CRUKPAP.shape)
 
 # Lire le fichier tsv CRUKPAP
 df_clinique_CRUKPAP = pd.read_csv(r'C:\Users\messa\Documents\Johanna_Lagoas_Stage\CRUKPAP\clinical_no_Inel.tsv', delimiter='\t')
@@ -83,30 +82,10 @@ df_genes_CRUKPAP = df_genes_CRUKPAP.loc[:, df_genes_CRUKPAP.columns.isin(colonne
 # Réintégrer la colonne patientid dans le DataFrame filtré
 df_genes_CRUKPAP = pd.concat([patientid_column_CRUKPAP, df_genes_CRUKPAP], axis=1)
 
+df_genes_CRUKPAP = df_genes_CRUKPAP.drop(columns=['patientid'])
 
-df_genes_CRUKPAP['patientid'] = df_genes_CRUKPAP['patientid'].str.strip('"')
-
-# Nettoyer les colonnes 'patientid' et 'sampleid' pour supprimer les espaces ou les caractères non souhaités
-df_clinique_CRUKPAP['sampleid'] = df_clinique_CRUKPAP['sampleid'].str.strip()
-df_genes_CRUKPAP['patientid'] = df_genes_CRUKPAP['patientid'].str.strip()
-
-# Sélectionner les colonnes souhaitées de df_clinique_CRUKPAP
-clinique_cols = ['sampleid', 'sex', 'age', 'smokingstatusnum', 'packsyearnum']
-df_clinique_filtered = df_clinique_CRUKPAP[clinique_cols].copy()
-
-# Remplacer les valeurs dans la colonne 'sex'
-df_clinique_filtered['sex'] = df_clinique_filtered['sex'].replace({'male': 1, 'female': 2})
-
-# Remplacer les valeurs dans la colonne 'age'
-df_clinique_filtered['age'] = df_clinique_filtered['age'].replace({'(24.9,41.5]': 1, '(41.5,58]': 2, '(58,74.5]': 3, '(74.5,91.1]':4})
-
-# Fusionner les DataFrames sur les colonnes correspondantes ('patientid' et 'sampleid')
-df_combined = pd.merge(df_clinique_filtered, df_genes_CRUKPAP, left_on='sampleid', right_on='patientid')
-
-# Supprimer les colonnes patientid et sampleid
-df_combined = df_combined.drop(columns=['patientid'])
-df_combined = df_combined.drop(columns=['sampleid'])
-
+print(df_genes_CRUKPAP.head())
+print(df_genes_CRUKPAP.shape)
 
 ## 3- tp3
 
@@ -115,8 +94,9 @@ print(df_clinique_CRUKPAP['cancer'])
 df_clinique_CRUKPAP['cancer'] = df_clinique_CRUKPAP['cancer'].replace({'cancer':1, 'no cancer':0})
 print(df_clinique_CRUKPAP['cancer'])
 
+
 # Extraire les descripteurs et l'étiquette
-X = df_combined
+X = df_genes_CRUKPAP
 y = df_clinique_CRUKPAP['hvnum']
 
 n_folds = 10
@@ -192,13 +172,14 @@ for train_index, test_index in kf.split(X): ##kf.split(X_scaled) coupe X en 10 p
     y_test = pd.Series(y_test_list)
     
     # Définir la grille des hyperparamètres à tester
-    param_grid = {'C': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]}
-
+    param_grid = {'C': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+    'l1_ratio': [0.5]}  # On fixe le ratio L1/L2 à 0.5
+    
     ## Initialiser le modèle logistique 
-    logistique1 = LogisticRegression(penalty='l1', solver='liblinear', max_iter=1000)
-
+    logistique1 = LogisticRegression(penalty='elasticnet', solver='saga', max_iter=10000)
+    
     # Initialiser la recherche par validation croisée
-    grid_search = GridSearchCV(estimator=logistique1, param_grid=param_grid, cv=5, scoring='accuracy')
+    grid_search = GridSearchCV(estimator=logistique1, param_grid=param_grid, cv=5, n_jobs = 10, scoring='accuracy')
 
     # Effectuer la recherche par validation croisée sur les données
     grid_search.fit(X_train, y_train)
@@ -207,18 +188,18 @@ for train_index, test_index in kf.split(X): ##kf.split(X_scaled) coupe X en 10 p
     best_C = grid_search.best_params_['C']
     
     # Initialiser un nouveau modèle logistique avec le meilleur paramètre C
-    logistique2 = LogisticRegression(penalty='l1', solver='liblinear', C=best_C, max_iter=1000)
-
+    logistique2 = LogisticRegression(penalty='elasticnet', solver='saga', C=best_C, l1_ratio = 0.5, max_iter=8000)
+    
     logistique2.fit(X_train, y_train)
     y_pred = logistique2.predict(X_test)
     y_prob = logistique2.predict_proba(X_test)
-  
+    
     accuracy = accuracy_score(y_test, y_pred)
     accuracies.append(accuracy)
     auc2 = roc_auc_score(y_test, y_prob[:, 1])
     print(f'AUC: {auc2:.2f}')
     auc_score.append(auc2)
-    print(y_test, y_prob[:,1])
+    
     # Calculer les valeurs de précision, rappel et seuils
     precision, recall, thresholds = precision_recall_curve(y_test, y_prob[:,1])
     # Calculer l'AUC-PR
@@ -236,7 +217,7 @@ for train_index, test_index in kf.split(X): ##kf.split(X_scaled) coupe X en 10 p
     
     # Ajouter à la structure de comptage des coefficients non nuls
     coeff_selection_count += (logistique2.coef_ != 0).flatten()
-    
+
 
 # Calculer la performance moyenne
 mean_accuracy = np.mean(accuracies)
@@ -293,5 +274,5 @@ print(counts)
 plt.bar(counts.keys(), counts.values())
 plt.xlabel('Nombre de sélections')
 plt.ylabel('Nombre de coefficients')
-plt.title('Histogramme de la sélection des coefficients CRUKPAP')
+plt.title('Histogramme de la sélection des coefficients')
 plt.show()
